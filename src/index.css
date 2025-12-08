@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark, cupcak, synthwave, retro, cyberpun, aqua;
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/20 shadow-xl;
+  }
+}
