@@ -7,7 +7,7 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://chatter-x-backend.vercel.app';
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
