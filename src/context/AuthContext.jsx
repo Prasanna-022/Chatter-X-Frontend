@@ -7,6 +7,7 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
+// Matches the backend URL from api.js
 const API_BASE_URL = 'https://chatter-x-backend-lnwx.vercel.app';
 
 export const AuthProvider = ({ children }) => {
@@ -14,12 +15,15 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [socket, setSocket] = useState(null);
     const navigate = useNavigate();
+
     const handleAuthSuccess = (userData) => {
-     
         setUser(userData); 
 
+        // Initialize Socket.io only after successful auth
         const newSocket = io(API_BASE_URL, {
-            withCredentials: true, 
+            withCredentials: true,
+            // Optimization: explicitly valid transports
+            transports: ['websocket', 'polling'], 
         });
         setSocket(newSocket);
 
@@ -32,9 +36,7 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (data) => {
         try {
-           
             const response = await api.post('/user/login', data);
-
             const { user } = response.data; 
 
             if (!user) {
@@ -45,9 +47,7 @@ export const AuthProvider = ({ children }) => {
 
         } catch (error) {
             const errorMessage = error.response?.data?.message || "Login failed due to network error.";
-         
             setUser(null); 
-
             throw errorMessage; 
         }
     };
@@ -56,6 +56,7 @@ export const AuthProvider = ({ children }) => {
         try {
             await api.post('/user/logout'); 
         } catch (error) {
+            console.error("Logout failed", error);
         } finally {
             setUser(null);
             if (socket) socket.disconnect();
@@ -63,16 +64,13 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-
     useEffect(() => {
         const checkUser = async () => {
             try {
                 const response = await api.get('/user/current-user'); 
                 const { user: validatedUser } = response.data;
-            
                 handleAuthSuccess(validatedUser); 
             } catch (error) {
-                
                 setUser(null);
             } finally {
                 setLoading(false);
@@ -80,7 +78,6 @@ export const AuthProvider = ({ children }) => {
         };
         checkUser();
     }, []);
-
 
     const value = {
         user,
