@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Loader2, User, Mail, Lock, Camera, Palette, Github, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '../api/api'; // Import API instance
 
 const THEMES = [
     { name: 'light', icon: '☀️' },
@@ -47,20 +48,31 @@ const LoginPage = () => {
                 await login({ email: formData.email, password: formData.password });
                 toast.success("Welcome back to NovaChat!");
             } else {
-                
+                // Registration Logic
                 const registerData = new FormData();
                 registerData.append('fullName', formData.fullName);
                 registerData.append('username', formData.username);
                 registerData.append('email', formData.email);
                 registerData.append('password', formData.password);
-                if (avatar) registerData.append('avatar', avatar);
+                if (avatar) {
+                    registerData.append('avatar', avatar);
+                } else {
+                    toast.error("Please select an avatar image");
+                    setLoading(false);
+                    return;
+                }
 
-                
-                
-                toast.error("Please implement the direct register call here matching your backend!"); 
+                const response = await api.post('/user/register', registerData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+
+                const { user, accessToken } = response.data;
+                handleAuthSuccess(user, accessToken);
+                toast.success("Account created successfully!");
             }
         } catch (err) {
-            toast.error(err.message || "Authentication failed");
+            console.error(err);
+            toast.error(typeof err === 'string' ? err : err.response?.data?.message || "Authentication failed");
         } finally {
             setLoading(false);
         }
@@ -182,16 +194,6 @@ const LoginPage = () => {
 
                     <div className="divider text-xs opacity-50 my-6">OR CONTINUE WITH</div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <button className="btn btn-outline btn-sm gap-2 hover:bg-base-content hover:text-base-100">
-                            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor"><path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
-                            Google
-                        </button>
-                        <button className="btn btn-outline btn-sm gap-2 hover:bg-base-content hover:text-base-100">
-                            <Github size={18} />
-                            GitHub
-                        </button>
-                    </div>
                     <p className="text-center mt-8 text-sm">
                         {isLogin ? "Don't have an account? " : "Already have an account? "}
                         <button 
@@ -225,22 +227,6 @@ const LoginPage = () => {
                         <p className="text-lg opacity-90 max-w-sm mx-auto font-light">
                             Experience real-time messaging, AI assistance, and seamless video calls in one beautiful platform.
                         </p>
-
-                        <motion.div 
-                            animate={{ y: [0, -10, 0] }} 
-                            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                            className="absolute top-20 left-10 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20 shadow-xl"
-                        >
-                            <span className="text-xs font-bold">✨ AI Powered</span>
-                        </motion.div>
-
-                        <motion.div 
-                            animate={{ y: [0, 10, 0] }} 
-                            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                            className="absolute bottom-20 right-10 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20 shadow-xl"
-                        >
-                            <span className="text-xs font-bold">🔒 Secure Chat</span>
-                        </motion.div>
                     </div>
                 </div>
 

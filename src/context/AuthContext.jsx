@@ -7,7 +7,6 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
-// Matches the backend URL from api.js
 const API_BASE_URL = 'https://chatter-x-backend-lnwx.vercel.app';
 
 export const AuthProvider = ({ children }) => {
@@ -16,33 +15,42 @@ export const AuthProvider = ({ children }) => {
     const [socket, setSocket] = useState(null);
     const navigate = useNavigate();
 
+    // handleAuthSuccess now only manages application state, not token storage
     const handleAuthSuccess = (userData) => {
         setUser(userData); 
 
-        // Initialize Socket.io only after successful auth
+        // Initialize Socket.io
+        // Note: For socket.io to work with cookies across domains in production, 
+        // ensure backend CORS is perfect.
         const newSocket = io(API_BASE_URL, {
             withCredentials: true,
-            // Optimization: explicitly valid transports
             transports: ['websocket', 'polling'], 
         });
         setSocket(newSocket);
 
         newSocket.on('connect', () => {
-            newSocket.emit('setup', userData);
+            if (userData?._id) {
+                newSocket.emit('setup', userData);
+            }
         });
 
-        navigate('/');
+        if (window.location.pathname === '/login') {
+            navigate('/');
+        }
     };
 
     const login = async (data) => {
         try {
             const response = await api.post('/user/login', data);
-            const { user } = response.data; 
+            
+            // Backend should return user object but NO token in body
+            const userData = response.data.user || response.data;
 
-            if (!user) {
+            if (!userData) {
                 throw new Error("Server returned an incomplete user response.");
             }
-            handleAuthSuccess(user); 
+            
+            handleAuthSuccess(userData); 
             return response.data;
 
         } catch (error) {
@@ -54,12 +62,15 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async () => {
         try {
-            await api.post('/user/logout'); 
+            await api.post('/user/logout'); // Backend clears the cookie
         } catch (error) {
             console.error("Logout failed", error);
         } finally {
             setUser(null);
-            if (socket) socket.disconnect();
+            if (socket) {
+                socket.disconnect();
+                setSocket(null);
+            }
             navigate('/login');
         }
     };
@@ -67,10 +78,12 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const checkUser = async () => {
             try {
+                // We rely on the cookie being sent automatically
                 const response = await api.get('/user/current-user'); 
-                const { user: validatedUser } = response.data;
-                handleAuthSuccess(validatedUser); 
+                const userData = response.data.user || response.data.data;
+                handleAuthSuccess(userData); 
             } catch (error) {
+                // If 401, cookie is missing or invalid
                 setUser(null);
             } finally {
                 setLoading(false);
