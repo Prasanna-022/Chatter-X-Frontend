@@ -1,8 +1,8 @@
-// src/pages/ChatPage.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import Pusher from 'pusher-js'; 
-import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt'; 
+import Pusher from 'pusher-js';
+import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
+import toast, { Toaster } from 'react-hot-toast'; // ✅ Added for notifications
 
 import ChatSidebar from '../components/ChatSidebar';
 import AiAssistantModal from '../components/AiAssistantModal';
@@ -11,11 +11,11 @@ import { useAuth } from '../context/AuthContext';
 import SearchModal from '../components/SearchModal';
 import FriendRequestModal from '../components/FriendRequestModal';
 import api from '../api/api';
-import { Phone, Video, MoreVertical, Paperclip, Smile, Mic, Send, Loader2, Trash2, X } from 'lucide-react';
+import { Phone, Video, MoreVertical, Paperclip, Smile, Send, Loader2, Trash2 } from 'lucide-react';
 
 const EMOJI_LIST = ['😀', '😂', '😍', '🤔', '🥳', '😭', '🤯', '😎', '👍', '👎', '❤️', '🔥', '✨', '🎉', '💡', '✅'];
 
-
+// --- KEYS ---
 const PUSHER_KEY = "5980ac2f1b1c333882d1"; 
 const PUSHER_CLUSTER = "ap2"; 
 const ZEGO_APP_ID = 990441467; 
@@ -50,29 +50,56 @@ const ChatPage = () => {
     const fileInputRef = useRef(null);
     const pusherRef = useRef(null);
 
-   
+    // Helper to refresh chat list
+    const refreshChatList = async () => {
+        try {
+            const response = await api.get('/chat');
+            const chatArray = response.data?.data;
+            setChats(Array.isArray(chatArray) ? chatArray : []);
+        } catch (error) {
+            console.error(error);
+            setChats([]);
+        }
+    };
+
+    // --- 1. SETUP PUSHER (Global Listener) ---
     useEffect(() => {
         if (!user) return;
 
-        
         const pusher = new Pusher(PUSHER_KEY, {
             cluster: PUSHER_CLUSTER,
         });
         pusherRef.current = pusher;
 
+        // Listen for Friend Requests & Acceptances on User's Private Channel
+        const userChannel = pusher.subscribe(user._id);
+
+        userChannel.bind("friend-request-received", (data) => {
+            toast.success(data.message || "New Friend Request!");
+        });
+
+        userChannel.bind("request-accepted", (data) => {
+            toast.success(data.message || "Friend Request Accepted!");
+            refreshChatList(); // Refresh chats immediately
+        });
+
+        // Initial Load
+        refreshChatList();
+
         return () => {
+            userChannel.unbind_all();
+            userChannel.unsubscribe();
             pusher.disconnect();
         };
     }, [user]);
 
-    // --- 2. SUBSCRIBE TO CHAT ROOM ---
+    // --- 2. SUBSCRIBE TO ACTIVE CHAT ROOM ---
     useEffect(() => {
         if (!currentChat || !pusherRef.current) return;
 
         const channel = pusherRef.current.subscribe(currentChat._id);
 
         channel.bind('new-message', (newMessage) => {
-           
             setCurrentMessages((prev) => {
                 if (prev.some(m => m._id === newMessage._id)) return prev;
                 return [...prev, newMessage];
@@ -85,17 +112,6 @@ const ChatPage = () => {
             channel.unsubscribe();
         };
     }, [currentChat]);
-
-    const refreshChatList = async () => {
-        try {
-            const response = await api.get('/chat');
-            const chatArray = response.data?.data;
-            setChats(Array.isArray(chatArray) ? chatArray : []);
-        } catch (error) {
-            console.error(error);
-            setChats([]);
-        }
-    };
 
     // Filter Logic
     const filteredChats = chats.filter(chat => {
@@ -141,7 +157,7 @@ const ChatPage = () => {
             ZEGO_SERVER_SECRET, 
             roomID, 
             user._id, 
-            user.fullName
+            user.fullName || user.username
         );
 
         const zp = ZegoUIKitPrebuilt.create(kitToken);
@@ -151,20 +167,22 @@ const ChatPage = () => {
         zp.joinRoom({
             container: document.getElementById("call-container"),
             scenario: {
-                mode: isVideo ? ZegoUIKitPrebuilt.OneONoneCall : ZegoUIKitPrebuilt.OneONoneCall, // Or GroupCall
+                mode: ZegoUIKitPrebuilt.OneONoneCall, 
             },
             showPreJoinView: false,
             turnOnCameraWhenJoining: isVideo,
             turnOnMicrophoneWhenJoining: true,
             onLeaveRoom: () => {
+                document.getElementById("call-container").style.display = "none"; // Hide container manually
                 setIsInCall(false);
             },
         });
+        document.getElementById("call-container").style.display = "block"; // Show container
     };
 
     // --- HANDLERS ---
     const handleMessageSubmit = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         if (!messageInput.trim()) return;
         
         const tempContent = messageInput.trim();
@@ -172,7 +190,6 @@ const ChatPage = () => {
 
         try {
             await api.post('/message', { content: tempContent, chatId: currentChat._id });
-           
         } catch (error) { console.error(error); }
     };
 
@@ -197,7 +214,6 @@ const ChatPage = () => {
         setContextMenu(null);
         try {
             await api.delete(`/message/${msgId}?type=${type}`);
-           
             setCurrentMessages(prev => prev.filter(msg => msg._id !== msgId));
         } catch (error) { alert("Error deleting message"); }
     };
@@ -211,6 +227,9 @@ const ChatPage = () => {
 
     return (
         <div className="flex h-screen antialiased bg-base-200 text-base-content overflow-hidden font-sans" onClick={() => setContextMenu(null)}>
+            
+            {/* Notification Toaster */}
+            <Toaster position="top-right" reverseOrder={false} />
 
             {/* --- MODALS --- */}
             <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
@@ -220,7 +239,7 @@ const ChatPage = () => {
 
             <div 
                 id="call-container" 
-                className={`fixed inset-0 z-50 bg-black ${isInCall ? 'block' : 'hidden'}`}
+                className={`fixed inset-0 z-50 bg-black hidden`} // Hidden by default, toggled by JS
             ></div>
 
             {/* Sidebar */}

@@ -1,6 +1,5 @@
-// src/context/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/api'; 
 
 const AuthContext = createContext();
@@ -11,10 +10,13 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
+    const location = useLocation();
 
+    // Helper to update state and redirect if needed
     const handleAuthSuccess = (userData) => {
         setUser(userData); 
-        if (window.location.pathname === '/login') {
+        // Only redirect to home if the user is currently on the login page
+        if (location.pathname === '/login') {
             navigate('/');
         }
     };
@@ -22,8 +24,12 @@ export const AuthProvider = ({ children }) => {
     const login = async (data) => {
         try {
             const response = await api.post('/user/login', data);
-            const userData = response.data.user || response.data;
+            
+            // Handle potentially different response structures
+            const userData = response.data.user || response.data.data;
+            
             if (!userData) throw new Error("Incomplete user response.");
+            
             handleAuthSuccess(userData); 
             return response.data;
         } catch (error) {
@@ -44,13 +50,17 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Check if user is logged in on page refresh
     useEffect(() => {
         const checkUser = async () => {
             try {
                 const response = await api.get('/user/current-user'); 
                 const userData = response.data.user || response.data.data;
-                handleAuthSuccess(userData); 
+                
+                // Just set the user, don't auto-redirect here to avoid interfering with current URL
+                setUser(userData); 
             } catch (error) {
+                // If 401 or error, user is null
                 setUser(null);
             } finally {
                 setLoading(false);

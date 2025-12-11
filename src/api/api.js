@@ -1,15 +1,23 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'https://chatter-x-backend.onrender.com';
+const API_URL = "https://chatter-x-backend.onrender.com"; 
 
 const api = axios.create({
-    baseURL: API_BASE_URL,
+    baseURL: API_URL,
     withCredentials: true, 
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// No interceptor needed for Authorization header since we use cookies
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response && error.response.status === 401) {
+           
+        }
+        return Promise.reject(error);
+    }
+);
 
 export default api;
