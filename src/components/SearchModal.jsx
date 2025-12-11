@@ -1,139 +1,100 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, UserPlus, Check } from 'lucide-react';
+import { X, Search, UserPlus, Loader2 } from 'lucide-react';
 import api from '../api/api';
+import toast from 'react-hot-toast';
 
 const SearchModal = ({ isOpen, onClose }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
-    const [statusMessage, setStatusMessage] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [sendingRequestId, setSendingRequestId] = useState(null);
 
     const handleSearch = async (e) => {
         e.preventDefault();
         if (!searchQuery.trim()) return;
-        
-        setStatusMessage('');
-        setLoading(true);
 
+        setIsLoading(true);
         try {
-            const response = await api.get(`/user/search?search=${searchQuery}`);
-            setSearchResults(response.data.users);
-            if (response.data.users.length === 0) {
-                setStatusMessage('No users found.');
-            }
+            const { data } = await api.get(`/user/search?search=${searchQuery}`);
+            setSearchResults(data.users || []);
         } catch (error) {
-            setStatusMessage('Error searching users.');
             console.error(error);
+            toast.error("Failed to search users");
         } finally {
-            setLoading(false);
+            setIsLoading(false);
         }
     };
 
-    const handleSendRequest = async (username) => {
+    const sendFriendRequest = async (user) => {
+        setSendingRequestId(user._id);
         try {
-            await api.post('/user/friend/send', { recipientUsername: username });
-            setStatusMessage(`Request sent to ${username}.`);
-            // Remove user from list to prevent double sending
-            setSearchResults(searchResults.filter(user => user.username !== username)); 
+            // ✅ FIX: Send 'recipientUsername' exactly as backend expects
+            await api.post('/user/friend/send', { 
+                recipientUsername: user.username 
+            });
+            toast.success(`Request sent to ${user.username}`);
         } catch (error) {
-            setStatusMessage(error.response?.data?.message || 'Failed to send request.');
+            toast.error(error.response?.data?.message || "Failed to send request");
+        } finally {
+            setSendingRequestId(null);
         }
     };
 
     if (!isOpen) return null;
 
     return (
-        <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                {/* Modal Container */}
-                <motion.div 
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="relative w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-white/20"
-                >
-                    {/* --- UNIQUE BACKGROUND IMAGE (Search Theme) --- */}
-                    <div className="absolute inset-0 z-0">
-                        <img 
-                            src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop" 
-                            alt="Background" 
-                            className="w-full h-full object-cover opacity-30"
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+                <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                    <h2 className="text-lg font-semibold">Search Users</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                <div className="p-4">
+                    <form onSubmit={handleSearch} className="relative">
+                        <input
+                            type="text"
+                            placeholder="Search by username or email..."
+                            className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                         />
-                        {/* Gradient Overlay for Readability */}
-                        <div className="absolute inset-0  from-white/80 via-white/90 to-white dark:from-gray-900/80 dark:via-gray-900/90 dark:to-gray-900 backdrop-blur-sm"></div>
-                    </div>
+                        <Search className="absolute left-3 top-3.5 text-gray-400" size={20} />
+                    </form>
 
-                    {/* Content Wrapper */}
-                    <div className="relative z-10 p-6">
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Find Friends</h2>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Search users by name or email</p>
-                            </div>
-                            <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition text-gray-500">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        
-                        {/* Search Bar */}
-                        <form onSubmit={handleSearch} className="relative mb-6">
-                            <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 backdrop-blur-md transition-all"
-                            />
-                            <button 
-                                type="submit" 
-                                className="absolute right-2 top-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                            >
-                                {loading ? '...' : 'Search'}
-                            </button>
-                        </form>
-
-                        {statusMessage && (
-                            <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm text-center border border-blue-100 dark:border-blue-800">
-                                {statusMessage}
-                            </div>
-                        )}
-
-                        {/* Results List */}
-                        <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-3">
-                            {searchResults.map((user) => (
-                                <motion.div 
-                                    key={user._id}
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    className="flex justify-between items-center p-3 bg-white/60 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 rounded-xl hover:shadow-md transition-all"
-                                >
-                                    <div className="flex items-center space-x-3">
-                                        <img 
-                                            src={user.avatar || "https://via.placeholder.com/40"} 
-                                            alt={user.fullName} 
-                                            className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-gray-600" 
-                                        />
+                    <div className="mt-4 max-h-60 overflow-y-auto space-y-2">
+                        {isLoading ? (
+                            <div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>
+                        ) : searchResults.length > 0 ? (
+                            searchResults.map((user) => (
+                                <div key={user._id} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-xl">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
+                                            <img src={user.avatar || "https://via.placeholder.com/40"} alt={user.username} className="w-full h-full object-cover" />
+                                        </div>
                                         <div>
-                                            <p className="font-semibold text-gray-800 dark:text-gray-100">{user.fullName}</p>
+                                            <p className="font-medium">{user.fullName}</p>
                                             <p className="text-xs text-gray-500">@{user.username}</p>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => handleSendRequest(user.username)}
-                                        className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full transition-colors"
-                                        title="Send Request"
+                                    <button 
+                                        onClick={() => sendFriendRequest(user)}
+                                        disabled={sendingRequestId === user._id}
+                                        className="btn btn-sm btn-primary"
                                     >
-                                        <UserPlus size={18} />
+                                        {sendingRequestId === user._id ? <Loader2 className="animate-spin" size={16}/> : <UserPlus size={18} />}
                                     </button>
-                                </motion.div>
-                            ))}
-                        </div>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-center text-gray-500 py-4">No users found</p>
+                        )}
                     </div>
-                </motion.div>
+                </div>
             </div>
-        </AnimatePresence>
+        </div>
     );
 };
 
