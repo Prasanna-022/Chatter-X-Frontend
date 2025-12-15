@@ -5,13 +5,13 @@ const API_URL = "https://chatter-x-backend.onrender.com";
 
 const api = axios.create({
     baseURL: API_URL,
-    withCredentials: true, // ✅ CRITICAL: This sends the Cookie to the backend
+    withCredentials: true, 
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Optional: Log errors for debugging
+
 api.interceptors.response.use(
     (response) => response,
     (error) => {

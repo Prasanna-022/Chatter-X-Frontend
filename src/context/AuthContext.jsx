@@ -12,10 +12,9 @@ export const AuthProvider = ({ children }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Helper to update state and redirect if needed
     const handleAuthSuccess = (userData) => {
         setUser(userData); 
-        // Only redirect to home if the user is currently on the login page
+        
         if (location.pathname === '/login') {
             navigate('/');
         }
@@ -25,7 +24,6 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await api.post('/user/login', data);
             
-            // Handle potentially different response structures
             const userData = response.data.user || response.data.data;
             
             if (!userData) throw new Error("Incomplete user response.");
@@ -50,7 +48,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Check if user is logged in on page refresh
+    
     useEffect(() => {
         const checkUser = async () => {
             try {
