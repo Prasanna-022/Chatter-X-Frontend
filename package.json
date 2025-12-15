@@ -15,7 +15,7 @@
     "axios": "^1.13.1",
     "daisyui": "^5.5.5",
     "events": "^3.3.0",
-    "framer-motion": "^12.23.24",
+    "framer-motion": "^12.23.26",
     "lucide-react": "^0.554.0",
     "pusher-js": "^8.4.0",
     "react": "^19.1.1",

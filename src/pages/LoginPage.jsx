@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, EyeOff, Loader2, User, Mail, Lock, Camera, Palette, Github, Globe } from 'lucide-react';
+import { Eye, EyeOff, Loader2, User, Mail, Lock, Camera, Palette, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api from '../api/api'; // Import API instance
+import api from '../api/api';
 
 const THEMES = [
     { name: 'light', icon: '☀️' },
@@ -30,6 +30,12 @@ const LoginPage = () => {
         localStorage.setItem('theme', theme);
     }, [theme]);
 
+    useEffect(() => {
+        return () => {
+            if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+        };
+    }, [avatarPreview]);
+
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
     const handleAvatarChange = (e) => {
@@ -45,8 +51,9 @@ const LoginPage = () => {
         setLoading(true);
         try {
             if (isLogin) {
+                // Your AuthContext handles the login API call
                 await login({ email: formData.email, password: formData.password });
-                toast.success("Welcome back to NovaChat!");
+                toast.success("Welcome back!");
             } else {
                 // Registration Logic
                 const registerData = new FormData();
@@ -54,6 +61,7 @@ const LoginPage = () => {
                 registerData.append('username', formData.username);
                 registerData.append('email', formData.email);
                 registerData.append('password', formData.password);
+                
                 if (avatar) {
                     registerData.append('avatar', avatar);
                 } else {
@@ -62,17 +70,22 @@ const LoginPage = () => {
                     return;
                 }
 
+                // Call API
                 const response = await api.post('/user/register', registerData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
 
-                const { user, accessToken } = response.data;
-                handleAuthSuccess(user, accessToken);
+                // RESPONSE HANDLING FIX:
+                // We extract the user. The cookie is set automatically by the backend.
+                const userData = response.data.user; 
+                
+                handleAuthSuccess(userData);
                 toast.success("Account created successfully!");
             }
         } catch (err) {
             console.error(err);
-            toast.error(typeof err === 'string' ? err : err.response?.data?.message || "Authentication failed");
+            const msg = typeof err === 'string' ? err : (err.response?.data?.message || "Authentication failed");
+            toast.error(msg);
         } finally {
             setLoading(false);
         }
@@ -80,17 +93,16 @@ const LoginPage = () => {
 
     return (
         <div className="min-h-screen w-full flex items-center justify-center bg-base-200 relative overflow-hidden transition-colors duration-500">
-            
-            {/* Background Blobs */}
+            {/* Background Elements */}
             <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-primary/30 rounded-full blur-[100px] animate-pulse"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-secondary/30 rounded-full blur-[100px] animate-pulse delay-1000"></div>
 
-            {/* Theme Toggle (Floating) */}
+            {/* Theme Toggle */}
             <div className="absolute top-6 right-6 z-50 dropdown dropdown-end">
                 <div tabIndex={0} role="button" className="btn btn-circle btn-ghost bg-base-100/50 backdrop-blur-md border border-white/10 shadow-lg">
                     <Palette size={20} />
                 </div>
-                <ul tabIndex={0} className="dropdown-content  menu p-2 shadow-2xl bg-base-100 rounded-box w-52 border border-base-300 mt-2">
+                <ul tabIndex={0} className="dropdown-content menu p-2 shadow-2xl bg-base-100 rounded-box w-52 border border-base-300 mt-2">
                     {THEMES.map((t) => (
                         <li key={t.name}>
                             <button onClick={() => setTheme(t.name)} className={`flex justify-between ${theme === t.name ? 'active' : ''}`}>
@@ -109,8 +121,7 @@ const LoginPage = () => {
                 transition={{ duration: 0.5 }}
                 className="w-full max-w-5xl h-[650px] bg-base-100/80 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden border border-white/10 flex flex-col md:flex-row relative z-10"
             >
-                
-                {/* Left Side: Form */}
+                {/* Form Section */}
                 <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center relative">
                     <div className="text-center mb-8">
                         <h1 className="text-4xl font-black  from-primary to-secondary bg-clip-text text-transparent mb-2">
@@ -130,11 +141,10 @@ const LoginPage = () => {
                                     exit={{ opacity: 0, height: 0 }}
                                     className="space-y-4 overflow-hidden"
                                 >
-                                    {/* Avatar Upload */}
                                     <div className="flex justify-center mb-4">
                                         <div className="relative group cursor-pointer">
                                             <div className="w-20 h-20 rounded-full bg-base-300 flex items-center justify-center overflow-hidden border-2 border-primary/50">
-                                                {avatarPreview ? <img src={avatarPreview} className="w-full h-full object-cover" /> : <User size={32} className="opacity-50"/>}
+                                                {avatarPreview ? <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" /> : <User size={32} className="opacity-50"/>}
                                             </div>
                                             <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 rounded-full transition-opacity cursor-pointer">
                                                 <Camera className="text-white" size={20} />
@@ -205,12 +215,10 @@ const LoginPage = () => {
                     </p>
                 </div>
 
+                {/* Decorative Side */}
                 <div className="hidden md:flex w-1/2 relative  from-primary to-secondary items-center justify-center overflow-hidden">
-                    {/* Overlay Pattern */}
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
-                    
                     <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]"></div>
-
                     <div className="relative z-10 text-white text-center p-10">
                         <motion.div 
                             initial={{ opacity: 0, y: 20 }}
@@ -222,14 +230,12 @@ const LoginPage = () => {
                                 <Globe size={48} className="text-white" />
                             </div>
                         </motion.div>
-                        
                         <h2 className="text-3xl font-bold mb-4 drop-shadow-lg">Connect with the World</h2>
                         <p className="text-lg opacity-90 max-w-sm mx-auto font-light">
                             Experience real-time messaging, AI assistance, and seamless video calls in one beautiful platform.
                         </p>
                     </div>
                 </div>
-
             </motion.div>
         </div>
     );

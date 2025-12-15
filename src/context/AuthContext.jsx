@@ -57,10 +57,9 @@ export const AuthProvider = ({ children }) => {
                 const response = await api.get('/user/current-user'); 
                 const userData = response.data.user || response.data.data;
                 
-                // Just set the user, don't auto-redirect here to avoid interfering with current URL
                 setUser(userData); 
             } catch (error) {
-                // If 401 or error, user is null
+                
                 setUser(null);
             } finally {
                 setLoading(false);

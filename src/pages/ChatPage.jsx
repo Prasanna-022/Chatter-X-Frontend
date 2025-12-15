@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Pusher from 'pusher-js';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
-import toast, { Toaster } from 'react-hot-toast'; // ✅ Added for notifications
+import toast, { Toaster } from 'react-hot-toast';
 
 import ChatSidebar from '../components/ChatSidebar';
 import AiAssistantModal from '../components/AiAssistantModal';
@@ -15,7 +15,6 @@ import { Phone, Video, MoreVertical, Paperclip, Smile, Send, Loader2, Trash2 } f
 
 const EMOJI_LIST = ['😀', '😂', '😍', '🤔', '🥳', '😭', '🤯', '😎', '👍', '👎', '❤️', '🔥', '✨', '🎉', '💡', '✅'];
 
-// --- KEYS ---
 const PUSHER_KEY = "5980ac2f1b1c333882d1"; 
 const PUSHER_CLUSTER = "ap2"; 
 const ZEGO_APP_ID = 990441467; 
@@ -24,14 +23,12 @@ const ZEGO_SERVER_SECRET = "96f56fa1ce109f77c71ba33bce375cf5";
 const ChatPage = () => {
     const { user, logout } = useAuth();
 
-    // UI States
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isRequestsOpen, setIsRequestsOpen] = useState(false);
     const [isAiOpen, setIsAiOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
-    // Data States
     const [chats, setChats] = useState([]);
     const [filterQuery, setFilterQuery] = useState('');
     const [aiInput, setAiInput] = useState('');
@@ -41,16 +38,14 @@ const ChatPage = () => {
     const [currentMessages, setCurrentMessages] = useState([]);
     const [messageInput, setMessageInput] = useState('');
 
-    // Call States (ZEGO)
     const [isInCall, setIsInCall] = useState(false);
-
     const [contextMenu, setContextMenu] = useState(null);
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+    
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
     const pusherRef = useRef(null);
 
-    // Helper to refresh chat list
     const refreshChatList = async () => {
         try {
             const response = await api.get('/chat');
@@ -62,28 +57,18 @@ const ChatPage = () => {
         }
     };
 
-    // --- 1. SETUP PUSHER (Global Listener) ---
     useEffect(() => {
         if (!user) return;
-
-        const pusher = new Pusher(PUSHER_KEY, {
-            cluster: PUSHER_CLUSTER,
-        });
+        const pusher = new Pusher(PUSHER_KEY, { cluster: PUSHER_CLUSTER });
         pusherRef.current = pusher;
 
-        // Listen for Friend Requests & Acceptances on User's Private Channel
         const userChannel = pusher.subscribe(user._id);
-
-        userChannel.bind("friend-request-received", (data) => {
-            toast.success(data.message || "New Friend Request!");
-        });
-
+        userChannel.bind("friend-request-received", (data) => toast.success(data.message || "New Friend Request!"));
         userChannel.bind("request-accepted", (data) => {
             toast.success(data.message || "Friend Request Accepted!");
-            refreshChatList(); // Refresh chats immediately
+            refreshChatList();
         });
 
-        // Initial Load
         refreshChatList();
 
         return () => {
@@ -93,12 +78,9 @@ const ChatPage = () => {
         };
     }, [user]);
 
-    // --- 2. SUBSCRIBE TO ACTIVE CHAT ROOM ---
     useEffect(() => {
         if (!currentChat || !pusherRef.current) return;
-
         const channel = pusherRef.current.subscribe(currentChat._id);
-
         channel.bind('new-message', (newMessage) => {
             setCurrentMessages((prev) => {
                 if (prev.some(m => m._id === newMessage._id)) return prev;
@@ -106,23 +88,18 @@ const ChatPage = () => {
             });
             refreshChatList(); 
         });
-
         return () => {
             channel.unbind_all();
             channel.unsubscribe();
         };
     }, [currentChat]);
 
-    // Filter Logic
     const filteredChats = chats.filter(chat => {
         if (!filterQuery) return true;
         const otherUser = chat.users.find(u => u._id !== user._id);
-        const name = otherUser?.name?.toLowerCase() || '';
-        const message = chat.latestMessage?.content?.toLowerCase() || '';
-        return name.includes(filterQuery.toLowerCase()) || message.includes(filterQuery.toLowerCase());
+        return otherUser?.name?.toLowerCase().includes(filterQuery.toLowerCase());
     });
 
-    // Fetch Messages
     useEffect(() => {
         if (currentChat) {
             const fetchMessages = async () => {
@@ -132,7 +109,6 @@ const ChatPage = () => {
                     const messagesArray = response.data?.messages || response.data?.data?.messages;
                     setCurrentMessages(Array.isArray(messagesArray) ? messagesArray : []);
                 } catch (error) {
-                    console.error(error);
                     setCurrentMessages([]);
                 } finally {
                     setIsLoadingMessages(false);
@@ -142,52 +118,37 @@ const ChatPage = () => {
         }
     }, [currentChat]);
 
-    // Auto Scroll
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [currentMessages]);
 
-    // --- 3. ZEGO VIDEO CALL LOGIC ---
     const startCall = async (isVideo) => {
         if (!currentChat) return;
-        
         const roomID = currentChat._id; 
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-            ZEGO_APP_ID, 
-            ZEGO_SERVER_SECRET, 
-            roomID, 
-            user._id, 
-            user.fullName || user.username
+            ZEGO_APP_ID, ZEGO_SERVER_SECRET, roomID, user._id, user.fullName || user.username
         );
-
         const zp = ZegoUIKitPrebuilt.create(kitToken);
-        
         setIsInCall(true);
-
         zp.joinRoom({
             container: document.getElementById("call-container"),
-            scenario: {
-                mode: ZegoUIKitPrebuilt.OneONoneCall, 
-            },
+            scenario: { mode: ZegoUIKitPrebuilt.OneONoneCall },
             showPreJoinView: false,
             turnOnCameraWhenJoining: isVideo,
             turnOnMicrophoneWhenJoining: true,
             onLeaveRoom: () => {
-                document.getElementById("call-container").style.display = "none"; // Hide container manually
+                document.getElementById("call-container").style.display = "none";
                 setIsInCall(false);
             },
         });
-        document.getElementById("call-container").style.display = "block"; // Show container
+        document.getElementById("call-container").style.display = "block";
     };
 
-    // --- HANDLERS ---
     const handleMessageSubmit = async (e) => {
         if (e) e.preventDefault();
         if (!messageInput.trim()) return;
-        
         const tempContent = messageInput.trim();
         setMessageInput('');
-
         try {
             await api.post('/message', { content: tempContent, chatId: currentChat._id });
         } catch (error) { console.error(error); }
@@ -201,8 +162,7 @@ const ChatPage = () => {
         setAiInput('');
         try {
             const response = await api.post('/user/ai/ask', { prompt: userPrompt });
-            const aiReply = response.data.reply;
-            setAiMessages(prev => [...prev, { sender: 'Nova AI', content: aiReply }]);
+            setAiMessages(prev => [...prev, { sender: 'Nova AI', content: response.data.reply }]);
         } catch (error) {
             setAiMessages(prev => [...prev, { sender: 'Nova AI', content: "Error: Could not reach AI." }]);
         }
@@ -226,23 +186,16 @@ const ChatPage = () => {
     if (!user) return null;
 
     return (
-        <div className="flex h-screen antialiased bg-base-200 text-base-content overflow-hidden font-sans" onClick={() => setContextMenu(null)}>
+        <div className="flex h-screen antialiased bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden font-sans" onClick={() => setContextMenu(null)}>
             
-            {/* Notification Toaster */}
             <Toaster position="top-right" reverseOrder={false} />
-
-            {/* --- MODALS --- */}
             <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
             <FriendRequestModal isOpen={isRequestsOpen} onClose={() => setIsRequestsOpen(false)} onFriendshipChange={refreshChatList} />
             <AiAssistantModal isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} aiMessages={aiMessages} aiInput={aiInput} setAiInput={setAiInput} handleAiSubmit={handleAiSubmit} />
             <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-            <div 
-                id="call-container" 
-                className={`fixed inset-0 z-50 bg-black hidden`} // Hidden by default, toggled by JS
-            ></div>
+            <div id="call-container" className={`fixed inset-0 z-50 bg-black hidden`}></div>
 
-            {/* Sidebar */}
             <ChatSidebar
                 user={user}
                 chats={filteredChats}
@@ -255,70 +208,87 @@ const ChatPage = () => {
                 logout={logout}
             />
 
-            {/* Right Panel */}
-            <div className="flex-1 h-full relative bg-base-100 flex flex-col">
+            <div className="flex-1 h-full relative flex flex-col bg-white dark:bg-gray-900">
                 <div className="absolute inset-0 opacity-40 pointer-events-none" style={{
-                    backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)',
-                    backgroundSize: '24px 24px'
+                    backgroundImage: 'radial-gradient(circle at 1px 1px, #cbd5e1 1px, transparent 0)',
+                    backgroundSize: '32px 32px'
                 }}></div>
 
                 {currentChat ? (
                     <>
-                        {/* Chat Header */}
-                        <div className="absolute top-4 left-4 right-4 z-20">
+                        {/* --- Glass Header --- */}
+                        <div className="absolute top-0 left-0 right-0 z-20 p-4">
                             <motion.div
                                 initial={{ y: -20, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
-                                className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-white/20 shadow-lg rounded-2xl p-3 flex justify-between items-center"
+                                className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-white/20 dark:border-gray-700/50 shadow-sm rounded-2xl p-3 flex justify-between items-center"
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className="avatar online">
-                                        <div className="w-10 h-10 rounded-full">
-                                            <img src={currentChat.users.find(u => u._id !== user._id)?.avatar || 'https://via.placeholder.com/40'} alt="user" />
-                                        </div>
+                                    <div className="relative">
+                                        <img 
+                                            src={currentChat.users.find(u => u._id !== user._id)?.avatar || 'https://via.placeholder.com/40'} 
+                                            alt="user" 
+                                            className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-gray-700"
+                                        />
+                                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-700 rounded-full animate-pulse"></span>
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-base-content leading-none">{currentChat.users.find(u => u._id !== user._id)?.name}</h3>
-                                        <span className="text-xs text-green-500 font-medium flex items-center gap-1 mt-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Active Now
-                                        </span>
+                                        <h3 className="font-bold text-gray-900 dark:text-white leading-none">
+                                            {currentChat.users.find(u => u._id !== user._id)?.name}
+                                        </h3>
+                                        <span className="text-xs text-green-600 dark:text-green-400 font-medium">Active Now</span>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => startCall(false)} className="btn btn-circle btn-ghost btn-sm hover:bg-base-200" title="Voice Call"><Phone size={18} /></button>
-                                    <button onClick={() => startCall(true)} className="btn btn-circle btn-ghost btn-sm hover:bg-base-200" title="Video Call"><Video size={18} /></button>
-                                    <button className="btn btn-circle btn-ghost btn-sm hover:bg-base-200"><MoreVertical size={18} /></button>
+                                <div className="flex gap-2 text-gray-500 dark:text-gray-400">
+                                    <button onClick={() => startCall(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors"><Phone size={20} /></button>
+                                    <button onClick={() => startCall(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors"><Video size={20} /></button>
+                                    <button className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors"><MoreVertical size={20} /></button>
                                 </div>
                             </motion.div>
                         </div>
 
-                        {/* Messages Area */}
-                        <div className="flex-1 overflow-y-auto px-4 pt-24 pb-28 custom-scrollbar space-y-2">
+                        {/* --- Messages Area --- */}
+                        <div className="flex-1 overflow-y-auto px-4 pt-28 pb-28 custom-scrollbar space-y-3">
                             {isLoadingMessages ? (
                                 <div className="flex justify-center items-center h-full">
-                                    <Loader2 className="animate-spin text-primary" size={40} />
+                                    <Loader2 className="animate-spin text-blue-500" size={40} />
                                 </div>
                             ) : (
-                                currentMessages.map((msg) => {
+                                currentMessages.map((msg, index) => {
                                     const isSender = msg.sender._id === user._id;
                                     return (
                                         <motion.div
-                                            key={msg._id}
-                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                            key={msg._id || index}
+                                            initial={{ opacity: 0, y: 10, scale: 0.98 }}
                                             animate={{ opacity: 1, y: 0, scale: 1 }}
                                             onContextMenu={(e) => openContextMenu(e, msg)}
-                                            className={`chat ${isSender ? 'chat-end' : 'chat-start'}`}
+                                            className={`flex ${isSender ? 'justify-end' : 'justify-start'} group`}
                                         >
-                                            <div className="chat-image avatar">
-                                                <div className="w-8 rounded-full">
-                                                    <img src={msg.sender.avatar || "https://via.placeholder.com/30"} alt="av" />
+                                            <div className={`flex max-w-[70%] gap-2 ${isSender ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                {!isSender && (
+                                                    <img 
+                                                        src={msg.sender.avatar || "https://via.placeholder.com/30"} 
+                                                        alt="av" 
+                                                        className="w-8 h-8 rounded-full object-cover self-end mb-1 border border-gray-200 dark:border-gray-700"
+                                                    />
+                                                )}
+                                                
+                                                <div className="flex flex-col">
+                                                    <div 
+                                                        className={`
+                                                            px-4 py-2.5 rounded-2xl shadow-sm text-sm leading-relaxed
+                                                            ${isSender 
+                                                                ? 'bg-blue-600 text-white rounded-br-none' 
+                                                                : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-gray-700 rounded-bl-none'
+                                                            }
+                                                        `}
+                                                    >
+                                                        {msg.content}
+                                                    </div>
+                                                    <span className={`text-[10px] text-gray-400 mt-1 ${isSender ? 'text-right' : 'text-left'}`}>
+                                                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
                                                 </div>
-                                            </div>
-                                            <div className={`chat-bubble shadow-sm ${isSender ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100'}`}>
-                                                {msg.content}
-                                            </div>
-                                            <div className="chat-footer opacity-50 text-[10px] mt-1 font-medium">
-                                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </div>
                                         </motion.div>
                                     );
@@ -327,28 +297,33 @@ const ChatPage = () => {
                             <div ref={messagesEndRef} />
                         </div>
 
-                        {/* Context Menu (Delete) */}
+                        {/* --- Context Menu --- */}
                         {contextMenu && (
-                            <div
-                                className="absolute bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl py-2 z-50 w-52"
-                                style={{ top: contextMenu?.y, left: contextMenu?.x }}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="fixed bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-2xl py-1 z-50 w-48 overflow-hidden"
+                                style={{ top: contextMenu.y, left: contextMenu.x }}
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 {contextMenu.isSender && (
-                                    <button onClick={() => handleDeleteMessage('for_everyone')} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2">
-                                        <Trash2 size={14} /> Delete for Everyone
+                                    <button onClick={() => handleDeleteMessage('for_everyone')} className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors">
+                                        <Trash2 size={16} /> Delete for Everyone
                                     </button>
                                 )}
-                                <button onClick={() => handleDeleteMessage('for_me')} className="w-full text-left px-4 py-2 text-sm text-base-content hover:bg-base-200 flex items-center gap-2">
-                                    <Trash2 size={14} /> Delete for Me
+                                <button onClick={() => handleDeleteMessage('for_me')} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2 transition-colors">
+                                    <Trash2 size={16} /> Delete for Me
                                 </button>
-                            </div>
+                            </motion.div>
                         )}
 
-                        {/* Input Area */}
-                        <div className="absolute bottom-4 left-4 right-4 z-20">
-                            <motion.div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-white/20 shadow-xl rounded-full p-2 flex items-center gap-2">
-                                <button className="btn btn-circle btn-ghost btn-sm text-gray-500">
+                        {/* --- Input Area --- */}
+                        <div className="absolute bottom-6 left-0 right-0 px-4 z-20">
+                            <motion.div 
+                                layout
+                                className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-white/20 dark:border-gray-700/50 shadow-xl rounded-full p-2 flex items-center gap-2 max-w-4xl mx-auto"
+                            >
+                                <button className="p-2 text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-white/10 rounded-full transition-all">
                                     <Paperclip size={20} />
                                 </button>
                                 <input type="file" ref={fileInputRef} className="hidden" />
@@ -357,33 +332,47 @@ const ChatPage = () => {
                                     type="text"
                                     value={messageInput}
                                     onChange={(e) => setMessageInput(e.target.value)}
-                                    placeholder="Type your message..."
-                                    className="flex-1 bg-transparent border-none focus:ring-0 text-base-content placeholder-gray-400 px-2"
+                                    placeholder="Type a message..."
+                                    className="flex-1 bg-transparent border-none focus:ring-0 text-gray-800 dark:text-white placeholder-gray-400 px-2"
                                     onKeyDown={(e) => e.key === 'Enter' && handleMessageSubmit(e)}
                                 />
 
-                                <button onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)} className="btn btn-circle btn-ghost btn-sm text-gray-500">
-                                    <Smile size={20} />
-                                </button>
+                                <div className="relative">
+                                    <button 
+                                        onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)} 
+                                        className="p-2 text-gray-500 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-white/10 rounded-full transition-all"
+                                    >
+                                        <Smile size={20} />
+                                    </button>
+                                    
+                                    {isEmojiPickerOpen && (
+                                        <div className="absolute bottom-14 right-0 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl p-3 grid grid-cols-8 gap-1 w-80 z-50">
+                                            {EMOJI_LIST.map((emoji, i) => (
+                                                <button key={i} onClick={() => { setMessageInput(p => p + emoji); setIsEmojiPickerOpen(false) }} className="text-xl hover:bg-gray-100 dark:hover:bg-white/10 rounded p-1 transition-colors">{emoji}</button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
 
-                                {isEmojiPickerOpen && (
-                                    <div className="absolute bottom-16 right-0 bg-white dark:bg-gray-800 border rounded-2xl shadow-2xl p-3 grid grid-cols-8 gap-1 w-80">
-                                        {EMOJI_LIST.map((emoji, i) => (
-                                            <button key={i} onClick={() => { setMessageInput(p => p + emoji); setIsEmojiPickerOpen(false) }} className="text-xl hover:bg-gray-100 rounded p-1">{emoji}</button>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <button onClick={handleMessageSubmit} className="btn btn-circle btn-sm btn-primary">
+                                <button 
+                                    onClick={handleMessageSubmit} 
+                                    disabled={!messageInput.trim()}
+                                    className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:shadow-none transform active:scale-95"
+                                >
                                     <Send size={18} />
                                 </button>
                             </motion.div>
                         </div>
                     </>
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-base-200">
-                        <h2 className="text-3xl font-bold text-base-content mb-2">Welcome to NovaChat</h2>
-                        <p className="text-gray-500">Select a conversation to start chatting.</p>
+                    <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                        <div className="w-24 h-24 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-6 animate-pulse">
+                            <span className="text-4xl">👋</span>
+                        </div>
+                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Welcome to ChatterX</h2>
+                        <p className="text-gray-500 dark:text-gray-400 max-w-sm">
+                            Select a conversation from the sidebar or start a new one to begin chatting.
+                        </p>
                     </div>
                 )}
             </div>
